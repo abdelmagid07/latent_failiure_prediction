@@ -1,0 +1,25 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Stage 1 generated artifacts (large; regenerate on GPU)
+stage1/data/activations/
+stage1/data/*.npy
+stage1/data/icrl*.json
+stage1/data/wrong_hypotheses.json
+stage1/data/auroc_by_layer.*
+
+# IDE / OS
+.cursor/
+.DS_Store
+Thumbs.db
