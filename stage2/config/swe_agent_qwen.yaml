@@ -1,0 +1,33 @@
+# SWE-agent config for on-policy Qwen3-8B via vLLM (OpenAI-compatible API).
+#
+# Prerequisites:
+#   vllm serve Qwen/Qwen3-8B --dtype bfloat16 --max-model-len 32768 \
+#     --chat-template-kwargs '{"enable_thinking": false}'
+#
+# Usage:
+#   sweagent run-batch --config config/swe_agent_qwen.yaml --instances.type swe_bench --instances.subset lite ...
+
+agent:
+  model:
+    name: hosted_vllm/Qwen3-8B
+    api_base: http://localhost:8000/v1
+    api_key: EMPTY
+    per_instance_cost_limit: 0
+    total_cost_limit: 0
+    per_instance_call_limit: 50
+    max_input_tokens: 0
+    temperature: 0.0
+  tools:
+    parse_function:
+      type: thought_action
+  history_processors: []
+
+environment:
+  deployment:
+    type: docker
+
+instances:
+  type: swe_bench
+  subset: lite
+  split: test
+  # Override with --instances.filter or pilot_instances.txt via run_pilot_batch.sh
