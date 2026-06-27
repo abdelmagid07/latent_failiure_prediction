@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import os
-import re
 from typing import Any
 
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from stage1.common.chat import apply_chat_template
+from stage1.icrl_gen.json_utils import extract_json
 
 _MODEL = None
 _TOKENIZER = None
@@ -99,15 +98,27 @@ class LocalQwenBackend:
         *,
         model: str | None = None,
         max_tokens: int = 256,
+        max_retries: int = 3,
     ) -> dict[str, Any]:
-        text = self.complete(
-            system,
-            user,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=0.0,
-        )
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            raise ValueError(f"Expected JSON in response: {text[:200]}")
-        return json.loads(match.group())
+        """Generate and parse a JSON object, retrying on unparseable output.
+
+        Qwen-8B frequently wraps JSON in prose or code fences; rather than crash a
+        multi-hour run on the first miss, regenerate (greedy first, then with a
+        little sampling to break out of a bad mode) and parse tolerantly. Raises
+        ValueError only after all attempts fail, so callers can skip the turn.
+        """
+        last_text = ""
+        for attempt in range(max(1, max_retries)):
+            text = self.complete(
+                system,
+                user,
+                model=model,
+                max_tokens=max_tokens,
+                # First attempt greedy/deterministic; later attempts sample to vary.
+                temperature=0.0 if attempt == 0 else 0.7,
+            )
+            last_text = text
+            obj = extract_json(text)
+            if obj is not None:
+                return obj
+        raise ValueError(f"Expected JSON in response after {max_retries} tries: {last_text[:200]}")

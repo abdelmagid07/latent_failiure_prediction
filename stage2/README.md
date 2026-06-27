@@ -47,25 +47,47 @@ pip install -e ".[swe]"
 
 Ensure `../stage1/data/value_axis.npy` exists (Colab notebook or `stage1.pipeline.run_gate`).
 
-### Phase 1 — Generate trajectories (SWE-agent + vLLM)
+### Phase 1 — Generate trajectories (local Docker → remote A100 inference)
 
-**Terminal A — vLLM server** (GPU node):
+Split the work so the laptop never runs the model: **SWE-agent + Docker run locally
+(WSL2)** and do all the CPU-heavy container/test execution, while **Qwen3-8B
+inference runs on a remote Colab A100** behind an OpenAI-compatible API. SWE-agent
+points at that remote endpoint.
 
-```bash
-vllm serve Qwen/Qwen3-8B --dtype bfloat16 --max-model-len 32768 \
-  --chat-template-kwargs '{"enable_thinking": false}'
+```
+  WSL2 (local)                              Colab A100 (remote)
+  ┌─────────────────────────┐    HTTPS     ┌──────────────────────────┐
+  │ SWE-agent + Docker       │ ───────────▶ │ vLLM serve Qwen3-8B       │
+  │ (repos, tests, patches)  │  /v1 tunnel  │ + cloudflared tunnel      │
+  └─────────────────────────┘              └──────────────────────────┘
 ```
 
-**Terminal B — SWE-agent batch** (Docker required):
+**On the A100 (server side).** Open
+[`notebooks/serve_qwen_colab.ipynb`](notebooks/serve_qwen_colab.ipynb) in Colab with
+an **A100** runtime and run all cells. It launches vLLM
+(`--chat-template-kwargs '{"enable_thinking": false}'`, which **must** match the
+projection step) and opens a Cloudflare tunnel, then prints the `MODEL_API_BASE` to
+export locally.
+
+**On your machine (WSL2).** Point the batch runner at the printed URL — no config
+edit needed; the script renders a resolved config from these env vars:
 
 ```bash
 cd stage2
+export MODEL_API_BASE="https://<your-tunnel>.trycloudflare.com/v1"
+export MODEL_API_KEY="EMPTY"            # or the token you set on the server
+export MODEL_NAME="hosted_vllm/Qwen3-8B"
 bash scripts/run_pilot_batch.sh config/pilot_instances.txt
 ```
 
-Target ~15–25 SWE-bench **Lite** instances; aim for ~5–10 successes and ~5–10 failures. Stop early once balanced.
+The runner preflights `${MODEL_API_BASE}/models` and checks Docker before launching,
+so a stale tunnel URL fails fast instead of deep inside a container.
 
-Edit [`config/swe_agent_qwen.yaml`](config/swe_agent_qwen.yaml) if vLLM is not at `localhost:8000`.
+Target ~15–25 SWE-bench **Lite** instances; aim for ~5–10 successes and ~5–10
+failures. Stop early once balanced.
+
+For an **all-local** run (vLLM on the same box), omit the env vars — the defaults
+point at `http://localhost:8000/v1`.
 
 ### Phase 2 — Ingest trajectories
 
@@ -77,7 +99,12 @@ python -m stage2.trajectories.ingest_batch \
 
 Writes normalized JSON to `data/normalized/` and `data/trajectories_manifest.json`.
 
-### Phase 3 — Extract projections (GPU)
+### Phase 3 — Extract projections (GPU — run on the A100, not locally)
+
+This step needs **raw residual-stream activations**, which the OpenAI-compatible
+API cannot provide — so it loads Qwen3-8B with HuggingFace directly and must run on
+the GPU (the same Colab A100). Upload the normalized trajectories + frozen axis to
+the A100 and run:
 
 ```bash
 python -m stage2.extract.project_steps \
@@ -119,7 +146,7 @@ Outputs in `data/`:
 | Decision | Value |
 |----------|-------|
 | Model | `Qwen/Qwen3-8B` |
-| Scaffold | SWE-agent + vLLM (on-policy generation) |
+| Scaffold | SWE-agent + Docker local (WSL2); Qwen3-8B inference on remote A100 via OpenAI-compatible API |
 | Activation read | HF teacher-forced replay, `enable_thinking=False` |
 | Layer | 21 (override from Stage 1 manifest if gate picks L22) |
 | Benchmark (pilot) | SWE-bench Lite |

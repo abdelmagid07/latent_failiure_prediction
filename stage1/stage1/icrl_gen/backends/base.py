@@ -26,4 +26,5 @@ class LLMBackend(Protocol):
         *,
         model: str | None = None,
         max_tokens: int = 256,
+        max_retries: int = 3,
     ) -> dict[str, Any]: ...

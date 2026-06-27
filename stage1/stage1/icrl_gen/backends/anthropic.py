@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 import os
-import re
 import time
 from typing import Any
 
 from dotenv import load_dotenv
+
+from stage1.icrl_gen.json_utils import extract_json
 
 load_dotenv()
 
@@ -66,15 +66,19 @@ class AnthropicBackend:
         *,
         model: str | None = None,
         max_tokens: int = 256,
+        max_retries: int = 3,
     ) -> dict[str, Any]:
-        text = self.complete(
-            system,
-            user,
-            model=model or self.judge_model,
-            max_tokens=max_tokens,
-            temperature=0.0,
-        )
-        match = re.search(r"\{.*\}", text, re.DOTALL)
-        if not match:
-            raise ValueError(f"Expected JSON in response: {text[:200]}")
-        return json.loads(match.group())
+        last_text = ""
+        for attempt in range(max(1, max_retries)):
+            text = self.complete(
+                system,
+                user,
+                model=model or self.judge_model,
+                max_tokens=max_tokens,
+                temperature=0.0 if attempt == 0 else 0.5,
+            )
+            last_text = text
+            obj = extract_json(text)
+            if obj is not None:
+                return obj
+        raise ValueError(f"Expected JSON in response after {max_retries} tries: {last_text[:200]}")

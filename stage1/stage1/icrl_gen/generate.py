@@ -302,19 +302,23 @@ def generate_batch(
             print(f"  SKIP {conv_id}: {exc}", flush=True)
             continue
 
-        conv = generate_conversation(
-            backend,
-            conv_id,
-            criterion_id,
-            crit["text"],
-            crit["type"],
-            paragraphs,
-            discovery_idx,
-            wrong_cache,
-            rng,
-            max_turn_retries=max_turn_retries,
-            verbose=verbose,
-        )
+        try:
+            conv = generate_conversation(
+                backend,
+                conv_id,
+                criterion_id,
+                crit["text"],
+                crit["type"],
+                paragraphs,
+                discovery_idx,
+                wrong_cache,
+                rng,
+                max_turn_retries=max_turn_retries,
+                verbose=verbose,
+            )
+        except Exception as exc:  # noqa: BLE001 — one bad conversation must not kill the batch
+            print(f"  SKIP {conv_id}: generation error ({type(exc).__name__}: {exc})", flush=True)
+            continue
         if conv is None:
             continue
 
