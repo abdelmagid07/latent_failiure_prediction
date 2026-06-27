@@ -2,18 +2,24 @@
 """
 Generate ICRL conversations for value-axis construction (paper Appendix A).
 
-Uses Anthropic API to role-play Qwen3-8B player turns and Wikipedia for seed paragraphs.
+Backends:
+  anthropic   — Claude/Opus via API (faithful Stage 1)
+  local_qwen  — Qwen3-8B on local GPU (proxy de-risk track)
 
-Example:
-  export ANTHROPIC_API_KEY=...
+Examples:
+  # Faithful track (Anthropic)
   python -m stage1.icrl_gen.generate --n 300 --output data/icrl.json --resume
-  python -m stage1.icrl_gen.generate --n 10 --output data/icrl_pilot.json  # cheap pilot
+
+  # Proxy de-risk track (Qwen local, no API key)
+  python -m stage1.icrl_gen.generate --n 100 --backend local_qwen \
+    --output data/icrl_proxy.json --resume --max-turn-retries 8
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import time
 from pathlib import Path
@@ -22,13 +28,14 @@ from stage1.common.config import criteria_by_id, load_criteria
 from stage1.common.paths import data_file
 from stage1.icrl.boundaries import extract_paragraph
 from stage1.icrl.schema import Conversation, Turn, load_conversations, save_conversations
-from stage1.icrl_gen.llm import complete, get_client
+from stage1.icrl_gen.backends.factory import get_backend
+from stage1.icrl_gen.llm import complete
 from stage1.icrl_gen.prompts import GAME_SYSTEM_PROMPT, META_PROMPT_TEMPLATE, PHASE_INSTRUCTIONS
 from stage1.icrl_gen.verify import check_and_locate, check_syntactic_criterion, judge_semantic
 from stage1.icrl_gen.wikipedia import fetch_paragraphs
 
 WRONG_HYP_CACHE = data_file("wrong_hypotheses.json")
-MAX_TURN_RETRIES = 5
+DEFAULT_MAX_TURN_RETRIES = 5
 
 
 def assign_criteria(n: int, rng: random.Random) -> list[str]:
@@ -57,7 +64,7 @@ def save_wrong_hypotheses(cache: dict[str, str]) -> None:
         json.dump(cache, f, indent=2)
 
 
-def get_wrong_hypothesis(client, criterion_id: str, criterion_text: str, cache: dict[str, str]) -> str:
+def get_wrong_hypothesis(backend, criterion_id: str, criterion_text: str, cache: dict[str, str]) -> str:
     if criterion_id in cache:
         return cache[criterion_id]
     system = "You invent plausible WRONG hypotheses for a hidden paragraph-editing game."
@@ -67,7 +74,7 @@ Invent ONE plausible but INCORRECT hypothesis a model might guess (one short sen
 Do NOT describe the true criterion. Examples: "use past tense", "capitalize key nouns", "make sentences shorter".
 
 Reply with only the wrong hypothesis sentence."""
-    hyp = complete(client, system, user, max_tokens=128, temperature=0.9)
+    hyp = complete(backend, system, user, max_tokens=128, temperature=0.9)
     cache[criterion_id] = hyp.strip()
     save_wrong_hypotheses(cache)
     return cache[criterion_id]
@@ -91,7 +98,7 @@ def build_meta_prompt(
 
 
 def generate_assistant_turn(
-    client,
+    backend,
     criterion_text: str,
     phase: str,
     seed_paragraph: str,
@@ -99,7 +106,7 @@ def generate_assistant_turn(
 ) -> str:
     system = build_meta_prompt(criterion_text, phase, seed_paragraph, wrong_hypothesis)
     user = "Write the assistant's single turn now (thinking tags + modified paragraph only)."
-    text = complete(client, system, user, max_tokens=768, temperature=0.8)
+    text = complete(backend, system, user, max_tokens=768, temperature=0.8)
     if "<thinking>" not in text.lower():
         text = f"<thinking>I'll try a modification based on my current hypothesis.</thinking>{text}"
     return text.strip()
@@ -113,7 +120,7 @@ def parse_assistant_or_retry(raw: str) -> str:
 
 
 def paragraph_satisfies(
-    client,
+    backend,
     criterion_id: str,
     criterion_text: str,
     criterion_type: str,
@@ -124,12 +131,12 @@ def paragraph_satisfies(
         return False
     if criterion_type == "syntactic":
         return check_syntactic_criterion(paragraph, criterion_id)
-    satisfies, _ = judge_semantic(client, criterion_text, paragraph)
+    satisfies, _ = judge_semantic(backend, criterion_text, paragraph)
     return satisfies
 
 
 def generate_conversation(
-    client,
+    backend,
     conv_id: str,
     criterion_id: str,
     criterion_text: str,
@@ -139,12 +146,13 @@ def generate_conversation(
     wrong_hyp_cache: dict[str, str],
     rng: random.Random,
     *,
+    max_turn_retries: int = DEFAULT_MAX_TURN_RETRIES,
     verbose: bool = True,
 ) -> Conversation | None:
     n_para = len(paragraphs)
     system_prompt = GAME_SYSTEM_PROMPT.replace("$N", str(n_para))
     turns: list[Turn] = [Turn(role="system", content=system_prompt)]
-    wrong_hyp = get_wrong_hypothesis(client, criterion_id, criterion_text, wrong_hyp_cache)
+    wrong_hyp = get_wrong_hypothesis(backend, criterion_id, criterion_text, wrong_hyp_cache)
 
     first_post_idx: int | None = None
     satisfying_char: int | None = None
@@ -158,13 +166,13 @@ def generate_conversation(
         if p_idx < discovery_idx:
             phase = "before_discovery"
             success = False
-            for attempt in range(MAX_TURN_RETRIES):
-                raw = generate_assistant_turn(client, criterion_text, phase, seed, wrong_hyp)
+            for attempt in range(max_turn_retries):
+                raw = generate_assistant_turn(backend, criterion_text, phase, seed, wrong_hyp)
                 try:
                     content = parse_assistant_or_retry(raw)
                 except ValueError:
                     continue
-                if not paragraph_satisfies(client, criterion_id, criterion_text, criterion_type, content):
+                if not paragraph_satisfies(backend, criterion_id, criterion_text, criterion_type, content):
                     turns.append(Turn(role="assistant", content=content))
                     turns.append(Turn(role="user", content="-1"))
                     success = True
@@ -180,13 +188,13 @@ def generate_conversation(
             phase = "discovery"
             feedback = "+1"
             success = False
-            for attempt in range(MAX_TURN_RETRIES):
-                raw = generate_assistant_turn(client, criterion_text, phase, seed, wrong_hyp)
+            for attempt in range(max_turn_retries):
+                raw = generate_assistant_turn(backend, criterion_text, phase, seed, wrong_hyp)
                 try:
                     content = parse_assistant_or_retry(raw)
                 except ValueError:
                     continue
-                ok, _ = check_and_locate(client, criterion_id, criterion_text, criterion_type, content)
+                ok, _ = check_and_locate(backend, criterion_id, criterion_text, criterion_type, content)
                 if ok:
                     turns.append(Turn(role="assistant", content=content))
                     turns.append(Turn(role="user", content=feedback))
@@ -204,14 +212,14 @@ def generate_conversation(
             feedback = "+1"
             first_post_idx = len(turns)
             success = False
-            for attempt in range(MAX_TURN_RETRIES):
-                raw = generate_assistant_turn(client, criterion_text, phase, seed, wrong_hyp)
+            for attempt in range(max_turn_retries):
+                raw = generate_assistant_turn(backend, criterion_text, phase, seed, wrong_hyp)
                 try:
                     content = parse_assistant_or_retry(raw)
                 except ValueError:
                     continue
                 ok, char_start = check_and_locate(
-                    client, criterion_id, criterion_text, criterion_type, content
+                    backend, criterion_id, criterion_text, criterion_type, content
                 )
                 if ok and char_start is not None and char_start > 0:
                     turns.append(Turn(role="assistant", content=content))
@@ -244,14 +252,19 @@ def generate_batch(
     n: int,
     output_path: Path,
     *,
+    backend_name: str = "anthropic",
     seed: int = 42,
     resume: bool = False,
     min_paragraphs: int = 4,
     max_paragraphs: int = 8,
+    max_turn_retries: int = DEFAULT_MAX_TURN_RETRIES,
     verbose: bool = True,
 ) -> list[Conversation]:
     rng = random.Random(seed)
-    client = get_client()
+    backend = get_backend(backend_name)
+    if verbose:
+        print(f"Using ICRL backend: {backend.name}", flush=True)
+
     by_id = criteria_by_id()
     wrong_cache = load_wrong_hypotheses()
 
@@ -290,7 +303,7 @@ def generate_batch(
             continue
 
         conv = generate_conversation(
-            client,
+            backend,
             conv_id,
             criterion_id,
             crit["text"],
@@ -299,6 +312,7 @@ def generate_batch(
             discovery_idx,
             wrong_cache,
             rng,
+            max_turn_retries=max_turn_retries,
             verbose=verbose,
         )
         if conv is None:
@@ -310,7 +324,8 @@ def generate_batch(
             para = extract_paragraph(get_first_post_turn(conv).content if get_first_post_turn(conv) else "")
             print(f"  OK {conv_id} post_para={para[:60]}... char_start={conv.satisfying_char_start}", flush=True)
 
-        time.sleep(0.3)
+        if backend.name != "local_qwen":
+            time.sleep(0.3)
 
     return results
 
@@ -326,21 +341,35 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--n", type=int, default=300, help="Number of conversations to generate")
     ap.add_argument("--output", type=Path, default=data_file("icrl.json"))
+    ap.add_argument("--backend", default=None, help="anthropic or local_qwen (default: ICRL_BACKEND env)")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--resume", action="store_true", help="Append to existing output, skip completed IDs")
     ap.add_argument("--min-paragraphs", type=int, default=4)
     ap.add_argument("--max-paragraphs", type=int, default=8)
+    ap.add_argument(
+        "--max-turn-retries",
+        type=int,
+        default=None,
+        help="Retries per turn (default 5 anthropic, 8 local_qwen)",
+    )
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
+
+    backend_name = args.backend or os.environ.get("ICRL_BACKEND", "anthropic")
+    max_retries = args.max_turn_retries
+    if max_retries is None:
+        max_retries = 8 if backend_name in ("local_qwen", "qwen", "local") else DEFAULT_MAX_TURN_RETRIES
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     convs = generate_batch(
         args.n,
         args.output,
+        backend_name=backend_name,
         seed=args.seed,
         resume=args.resume,
         min_paragraphs=args.min_paragraphs,
         max_paragraphs=args.max_paragraphs,
+        max_turn_retries=max_retries,
         verbose=not args.quiet,
     )
     print(f"\nDone. {len(convs)} conversations -> {args.output}", flush=True)

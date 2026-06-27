@@ -17,6 +17,8 @@
 
 Small N is intentional. This is a noise check; a few dozen trajectories is enough to see whether within-class jitter swamps between-class separation.
 
+**Two tracks:** The **proxy track** (Qwen-local ICRL, ~100 convos, 0.75 axis gate) answers the noise question cheaply this week. **Faithful Stage 1** (Opus 300, 0.93 gate) remains required before any transfer claim — see [`scripts/run_proxy_week1.sh`](scripts/run_proxy_week1.sh).
+
 ---
 
 ## What to log per step

@@ -58,15 +58,16 @@ def eval_auroc(
     return {"auroc_by_layer": auroc, "n_held_out_conversations": n_convs}
 
 
-def plot_auroc(auroc_by_layer: dict, output: Path, paper_targets: dict):
+def plot_auroc(auroc_by_layer: dict, output: Path, paper_targets: dict | None = None):
     layers = sorted(int(k) for k in auroc_by_layer.keys())
     values = [auroc_by_layer[str(l)] for l in layers]
 
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.plot(layers, values, marker="o", markersize=3, label="held-out AUROC")
-    for layer, target in paper_targets.items():
-        ax.axhline(y=target, color="gray", linestyle="--", alpha=0.5, linewidth=0.8)
-        ax.annotate(f"L{layer} paper={target:.3f}", xy=(layers[-1], target), fontsize=8, alpha=0.7)
+    if paper_targets:
+        for layer, target in paper_targets.items():
+            ax.axhline(y=target, color="gray", linestyle="--", alpha=0.5, linewidth=0.8)
+            ax.annotate(f"L{layer} paper={target:.3f}", xy=(layers[-1], target), fontsize=8, alpha=0.7)
     ax.set_xlabel("Layer")
     ax.set_ylabel("AUROC (max(auc, 1-auc))")
     ax.set_title("Value axis held-out criteria generalization")

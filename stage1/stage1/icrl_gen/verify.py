@@ -3,7 +3,7 @@
 import re
 
 from stage1.icrl.boundaries import extract_paragraph
-from stage1.icrl_gen.llm import JUDGE_MODEL, complete_json
+from stage1.icrl_gen.llm import complete_json
 
 EMOJI_RE = re.compile(
     "["
@@ -98,7 +98,7 @@ def verify_turn(criterion_id: str, paragraph: str, criterion_type: str) -> bool 
     return None
 
 
-def judge_semantic(client, criterion_text: str, paragraph: str) -> tuple[bool, int | None]:
+def judge_semantic(backend, criterion_text: str, paragraph: str) -> tuple[bool, int | None]:
     """LLM yes/no judge for semantic criteria; returns (satisfies, char_start)."""
     system = "You verify whether a paragraph satisfies a hidden editing criterion. Reply JSON only."
     user = f"""Criterion: the modified text must {criterion_text}
@@ -109,7 +109,8 @@ Paragraph:
 Reply JSON only:
 {{"satisfies": true or false, "satisfying_char_start": integer 0-based index in the paragraph where the criterion is first clearly satisfied (use 0 if the whole opening satisfies it)}}
 """
-    data = complete_json(client, system, user, model=JUDGE_MODEL)
+    judge_model = getattr(backend, "judge_model", None)
+    data = complete_json(backend, system, user, model=judge_model)
     satisfies = bool(data.get("satisfies"))
     start = data.get("satisfying_char_start")
     if start is None:
@@ -122,7 +123,7 @@ Reply JSON only:
 
 
 def check_and_locate(
-    client,
+    backend,
     criterion_id: str,
     criterion_text: str,
     criterion_type: str,
@@ -144,7 +145,7 @@ def check_and_locate(
             start = max(0, len(paragraph) - 1)
         return True, start
 
-    satisfies, start = judge_semantic(client, criterion_text, paragraph)
+    satisfies, start = judge_semantic(backend, criterion_text, paragraph)
     if not satisfies or start is None:
         return False, None
     if start <= 0:

@@ -85,8 +85,10 @@ def run(
     enable_thinking: bool,
     dtype: str,
     force: bool = False,
+    activations_dir: Path | None = None,
 ) -> list[Path]:
-    ACTIVATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = activations_dir or ACTIVATIONS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
     conversations = load_conversations(icrl_path)
 
     torch_dtype = getattr(torch, dtype)
@@ -104,7 +106,7 @@ def run(
 
     written = []
     for conv in conversations:
-        out_path = ACTIVATIONS_DIR / f"{conv.conv_id}.npz"
+        out_path = out_dir / f"{conv.conv_id}.npz"
         if out_path.exists() and not force:
             written.append(out_path)
             continue
@@ -137,11 +139,18 @@ def main():
     ap.add_argument("--enable-thinking", action="store_true")
     ap.add_argument("--dtype", default=defaults["dtype"])
     ap.add_argument("--force", action="store_true")
+    ap.add_argument(
+        "--activations-dir",
+        type=Path,
+        default=None,
+        help="Output directory for .npz caches (default: data/activations)",
+    )
     args = ap.parse_args()
 
     if not args.icrl.exists():
         raise SystemExit(f"ICRL file not found: {args.icrl}. Run mock_data.py first.")
 
+    act_dir = args.activations_dir or ACTIVATIONS_DIR
     print(f"Extracting activations from {len(load_conversations(args.icrl))} conversations...", flush=True)
     paths = run(
         args.icrl,
@@ -150,8 +159,9 @@ def main():
         enable_thinking=args.enable_thinking,
         dtype=args.dtype,
         force=args.force,
+        activations_dir=act_dir,
     )
-    print(f"Done. {len(paths)} activation files in {ACTIVATIONS_DIR}", flush=True)
+    print(f"Done. {len(paths)} activation files in {act_dir}", flush=True)
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = ROOT / "config"
 DATA_DIR = ROOT / "data"
 ACTIVATIONS_DIR = DATA_DIR / "activations"
+ACTIVATIONS_PROXY_DIR = DATA_DIR / "activations_proxy"
 
 
 def config_file(name: str) -> Path:
@@ -18,5 +19,6 @@ def data_file(name: str) -> Path:
     return DATA_DIR / name
 
 
-def activation_file(conv_id: str) -> Path:
-    return ACTIVATIONS_DIR / f"{conv_id}.npz"
+def activation_file(conv_id: str, *, activations_dir: Path | None = None) -> Path:
+    base = activations_dir or ACTIVATIONS_DIR
+    return base / f"{conv_id}.npz"

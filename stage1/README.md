@@ -95,7 +95,51 @@ from paths import data_file, DEFAULT_LAYER
 probe = data_file("value_axis.npy")
 ```
 
-## Phase 2 — ICRL generation (Anthropic API)
+Do not proceed to SWE-bench projection until the gate passes on held-out criteria.
+
+## Proxy de-risk track (Qwen local — NOT faithful Stage 1)
+
+Fast path for Jonas noise feasibility: build a **proxy axis** from Qwen3-8B-generated ICRL on the same GPU pod. No Anthropic API key.
+
+| | Faithful Stage 1 | Proxy de-risk |
+|--|------------------|---------------|
+| ICRL generator | Opus (Anthropic) | Qwen3-8B local |
+| N conversations | 300 | 100 |
+| Gate threshold | 0.93 | **0.75** |
+| Output axis | `value_axis.npy` | `value_axis_proxy.npy` |
+| Purpose | Reproduce paper | Noise measurement only |
+
+### Quick start (single GPU pod)
+
+```bash
+# From repo root
+bash scripts/run_proxy_week1.sh --pilot   # 10 convos test
+bash scripts/run_proxy_week1.sh           # full 100 + extract + proxy gate
+```
+
+Or step-by-step:
+
+```bash
+cd stage1
+pip install -e .
+
+# 1. Generate proxy ICRL (GPU, hours for n=100)
+python -m stage1.icrl_gen.generate --n 100 --backend local_qwen \
+  --output data/icrl_proxy.json --resume --max-turn-retries 8
+
+# 2. Extract + proxy gate (separate activation cache)
+python -m stage1.pipeline.extract_activations \
+  --icrl data/icrl_proxy.json --activations-dir data/activations_proxy --force
+python -m stage1.pipeline.run_proxy_gate --icrl data/icrl_proxy.json --skip-extract
+```
+
+**Colab:** [`notebooks/stage1_proxy_gpu_colab.ipynb`](notebooks/stage1_proxy_gpu_colab.ipynb)
+
+**Success:** L21/L22 AUROC ≥ 0.75 → `data/value_axis_proxy.npy` frozen for Stage 2 de-risk.
+
+**Important:** Proxy artifacts never overwrite `value_axis.npy`. Label all Jonas deliverables as "proxy axis, noise feasibility only."
+
+## Phase 2 — ICRL generation (Anthropic API — faithful track)
 
 Generate ~300 conversations per paper Appendix A using Wikipedia seeds + Opus.
 

@@ -1,0 +1,20 @@
+gate_threshold: 0.75
+gate_layers: [21, 22]
+axis_output: value_axis_proxy.npy
+manifest_output: axis_manifest_proxy.json
+auroc_output: auroc_by_layer_proxy.json
+plot_output: auroc_by_layer_proxy.png
+activations_subdir: activations_proxy
+axis_type: proxy
+generator: qwen3-8b-local
+purpose: noise_feasibility_only
+icrl_default: icrl_proxy.json
+n_icrl: 100
+
+# Inherited from faithful defaults when not specified
+model: Qwen/Qwen3-8B
+default_layer: 21
+enable_thinking: false
+dtype: bfloat16
+n_layers: 37
+hidden_dim: 4096

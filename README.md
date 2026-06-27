@@ -10,6 +10,7 @@ Research project: test whether the **value axis** from [Jiang et al. (2026)](htt
 | [`EXPERIMENT.md`](EXPERIMENT.md) | De-risking experiment spec (Jonas) |
 | [`PAPER.tex`](PAPER.tex) | Value axis anchor paper (full text) |
 | [`stage1/`](stage1/) | **Stage 1 pipeline** — ICRL gen, activation extract, axis build, AUROC gate |
+| [`stage2/`](stage2/) | **Stage 2 de-risking** — SWE-bench trajectories, projections, noise analyses |
 | [`value-axis/`](value-axis/) | Upstream authors' code (fork) + `common/paths.py` shim |
 
 ## Quick start
@@ -23,9 +24,15 @@ See [`stage1/README.md`](stage1/README.md).
 
 Gate: layer 21/22 held-out AUROC ≥ 0.93 → freeze `stage1/data/value_axis.npy`.
 
-### De-risking experiment (next)
+### Stage 2 — de-risking experiment
 
-See [`EXPERIMENT.md`](EXPERIMENT.md) — SWE-bench trajectories + projection analyses.
+See [`stage2/README.md`](stage2/README.md) and [`EXPERIMENT.md`](EXPERIMENT.md).
+
+**Proxy track (Week 1, recommended first):** Qwen-local ICRL → proxy axis (0.75 gate) → SWE-bench noise check. No Opus API. See [`scripts/run_proxy_week1.sh`](scripts/run_proxy_week1.sh).
+
+**Faithful track:** Opus ICRL → 0.93 gate → same Stage 2 pipeline with `value_axis.npy`.
+
+### Full paper (after de-risking greenlight)
 
 ## References
 
