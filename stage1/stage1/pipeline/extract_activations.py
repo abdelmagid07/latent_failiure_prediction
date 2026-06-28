@@ -10,7 +10,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from stage1.common.chat import apply_chat_template
 from stage1.common.config import load_defaults
-from stage1.common.hooks import LayerActivationCapture
+from stage1.common.hooks import LayerActivationCapture, get_transformer_num_layers
 from stage1.common.paths import ACTIVATIONS_DIR, data_file
 from stage1.icrl.boundaries import (
     build_messages_up_to_turn,
@@ -103,6 +103,14 @@ def run(
         trust_remote_code=True,
     ).eval()
     device = next(model.parameters()).device
+
+    actual_layers = get_transformer_num_layers(model)
+    if n_layers != actual_layers:
+        print(
+            f"Note: config n_layers={n_layers} but model has {actual_layers} layers; using {actual_layers}.",
+            flush=True,
+        )
+        n_layers = actual_layers
 
     written = []
     for conv in conversations:

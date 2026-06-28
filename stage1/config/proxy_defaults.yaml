@@ -16,5 +16,5 @@ model: Qwen/Qwen3-8B
 default_layer: 21
 enable_thinking: false
 dtype: bfloat16
-n_layers: 37
+n_layers: 36
 hidden_dim: 4096

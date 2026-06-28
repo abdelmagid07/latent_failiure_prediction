@@ -19,7 +19,7 @@ def cosine_projection(activations: torch.Tensor, direction: torch.Tensor) -> tor
 class LayerActivationCapture:
     """Register forward hooks on all transformer layers and collect last forward pass."""
 
-    def __init__(self, model, n_layers: int = 37):
+    def __init__(self, model, n_layers: int = 36):
         self._storage: dict[int, torch.Tensor] = {}
         self._handles = []
 
@@ -43,7 +43,7 @@ class LayerActivationCapture:
     def get(self, layer_idx: int) -> torch.Tensor | None:
         return self._storage.get(layer_idx)
 
-    def all_layers(self, n_layers: int = 37) -> torch.Tensor:
+    def all_layers(self, n_layers: int = 36) -> torch.Tensor:
         """Return (n_layers, seq_len, hidden_dim) for the cached forward pass."""
         layers = []
         for i in range(n_layers):
@@ -52,7 +52,7 @@ class LayerActivationCapture:
             t = self._storage[i]
             if t.dim() == 3:
                 t = t[0]
-            layers.append(t.cpu())
+            layers.append(t.cpu().float())
         return torch.stack(layers, dim=0)
 
 
@@ -61,3 +61,12 @@ def unit_direction(vec: np.ndarray) -> np.ndarray:
     if norm < 1e-8:
         return vec
     return vec / norm
+
+
+def get_transformer_num_layers(model) -> int:
+    """Return the number of decoder blocks in a HuggingFace causal LM."""
+    if hasattr(model, "model") and hasattr(model.model, "layers"):
+        return len(model.model.layers)
+    if hasattr(model, "config") and hasattr(model.config, "num_hidden_layers"):
+        return int(model.config.num_hidden_layers)
+    raise AttributeError("Could not infer num_hidden_layers from model")

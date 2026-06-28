@@ -8,5 +8,5 @@ paper_targets:
 enable_thinking: false
 dtype: bfloat16
 split_seed: 42
-n_layers: 37
+n_layers: 36  # Qwen3-8B has 36 decoder layers (0-35); paper axis shape may say 37
 hidden_dim: 4096

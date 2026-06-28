@@ -98,6 +98,22 @@ def verify_turn(criterion_id: str, paragraph: str, criterion_type: str) -> bool 
     return None
 
 
+def _coerce_bool(value) -> bool:
+    """Parse a judge 'satisfies' field robustly.
+
+    Models often emit booleans as strings ("false"/"no"/"0"). Plain bool() would
+    treat the non-empty string "false" as True, making the judge rubber-stamp
+    everything. Treat only explicit truthy tokens as True.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in ("true", "yes", "1", "y", "t")
+    return bool(value)
+
+
 def judge_semantic(backend, criterion_text: str, paragraph: str) -> tuple[bool, int | None]:
     """LLM yes/no judge for semantic criteria; returns (satisfies, char_start)."""
     system = "You verify whether a paragraph satisfies a hidden editing criterion. Reply JSON only."
@@ -111,7 +127,7 @@ Reply JSON only:
 """
     judge_model = getattr(backend, "judge_model", None)
     data = complete_json(backend, system, user, model=judge_model)
-    satisfies = bool(data.get("satisfies"))
+    satisfies = _coerce_bool(data.get("satisfies"))
     start = data.get("satisfying_char_start")
     if start is None:
         start = 0 if satisfies else None

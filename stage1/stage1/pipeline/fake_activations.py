@@ -15,7 +15,7 @@ from stage1.icrl.schema import load_conversations
 def write_fake_activations(
     icrl_path,
     *,
-    n_layers: int = 37,
+    n_layers: int = 36,
     hidden_dim: int = 4096,
     seed: int = 0,
 ):

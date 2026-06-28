@@ -38,9 +38,9 @@ WRONG_HYP_CACHE = data_file("wrong_hypotheses.json")
 DEFAULT_MAX_TURN_RETRIES = 5
 
 
-def assign_criteria(n: int, rng: random.Random) -> list[str]:
-    """Distribute n conversations across all 50 criteria (~6 each for n=300)."""
-    ids = [c["id"] for c in load_criteria()]
+def assign_criteria(n: int, rng: random.Random, criteria_ids: list[str] | None = None) -> list[str]:
+    """Distribute n conversations across the given criteria (default: all 50)."""
+    ids = criteria_ids if criteria_ids is not None else [c["id"] for c in load_criteria()]
     base, extra = divmod(n, len(ids))
     assignment: list[str] = []
     order = ids.copy()
@@ -259,6 +259,7 @@ def generate_batch(
     max_paragraphs: int = 8,
     max_turn_retries: int = DEFAULT_MAX_TURN_RETRIES,
     verbose: bool = True,
+    syntactic_only: bool = False,
 ) -> list[Conversation]:
     rng = random.Random(seed)
     backend = get_backend(backend_name)
@@ -268,6 +269,13 @@ def generate_batch(
     by_id = criteria_by_id()
     wrong_cache = load_wrong_hypotheses()
 
+    criteria_ids: list[str] | None = None
+    if syntactic_only:
+        criteria_ids = [c["id"] for c in load_criteria() if c["type"] == "syntactic"]
+        if verbose:
+            print(f"Syntactic-only mode: {len(criteria_ids)} criteria, exact programmatic "
+                  f"labels (no LLM judge): {criteria_ids}", flush=True)
+
     existing: list[Conversation] = []
     done_ids: set[str] = set()
     if resume and output_path.exists():
@@ -276,7 +284,7 @@ def generate_batch(
         if verbose:
             print(f"Resuming: {len(existing)} conversations already in {output_path}", flush=True)
 
-    assignment = assign_criteria(n, rng)
+    assignment = assign_criteria(n, rng, criteria_ids)
     results = list(existing)
 
     for i, criterion_id in enumerate(assignment):
@@ -357,6 +365,12 @@ def main():
         help="Retries per turn (default 5 anthropic, 8 local_qwen)",
     )
     ap.add_argument("--quiet", action="store_true")
+    ap.add_argument(
+        "--syntactic-only",
+        action="store_true",
+        help="Only generate the 15 syntactic criteria (c000-c014). Labels are exact "
+        "(programmatic), bypassing the unreliable LLM judge — recommended for the proxy axis.",
+    )
     args = ap.parse_args()
 
     backend_name = args.backend or os.environ.get("ICRL_BACKEND", "anthropic")
@@ -375,6 +389,7 @@ def main():
         max_paragraphs=args.max_paragraphs,
         max_turn_retries=max_retries,
         verbose=not args.quiet,
+        syntactic_only=args.syntactic_only,
     )
     print(f"\nDone. {len(convs)} conversations -> {args.output}", flush=True)
 
