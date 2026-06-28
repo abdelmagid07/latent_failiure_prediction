@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 swe = ["sweagent>=1.0.0"]
+mini = ["pytest>=7.0.0"]
 
 [build-system]
 requires = ["setuptools>=61.0"]

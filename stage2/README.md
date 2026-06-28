@@ -32,6 +32,23 @@ bash scripts/smoke_test.sh
 
 No GPU, no SWE-agent. Parses `tests/fixtures/sample.traj`, builds mock trajectories, runs all three analyses.
 
+## Mini local-agent track (Colab only — no Docker)
+
+**Recommended for Stage 2 de-risk.** Three notebooks, no local setup:
+
+| Step | Notebook | Runtime |
+|------|----------|---------|
+| 1 | [`notebooks/serve_qwen_colab.ipynb`](notebooks/serve_qwen_colab.ipynb) | A100 |
+| 2 | [`notebooks/mini_agent_colab.ipynb`](notebooks/mini_agent_colab.ipynb) | **CPU** |
+| 3 | [`notebooks/project_and_analyze_colab.ipynb`](notebooks/project_and_analyze_colab.ipynb) | A100 |
+
+Colab link: `https://colab.research.google.com/github/abdelmagid07/latent_failiure_prediction/blob/main/stage2/notebooks/mini_agent_colab.ipynb`
+
+12 hand-written bug-fix tasks ([`config/mini_instances.txt`](config/mini_instances.txt)).
+Label results as *mini-agent* de-risk, not full SWE-bench scale.
+
+CLI alternative (optional): `bash scripts/run_mini_batch.sh` if you prefer a shell.
+
 ## Install
 
 ```bash
@@ -162,8 +179,8 @@ stage2/
     trajectories/   parse .traj, ingest batch, mock data
     extract/        project_steps, token_spans, mock_projections
     analyze/        SNR, final-step plot, token-type noise
-  scripts/          smoke_test.sh, run_pilot_batch.sh
-  tests/fixtures/   sample.traj
+  scripts/          smoke_test.sh, run_pilot_batch.sh, run_mini_batch.sh
+  tests/            fixtures + mini catalog tests
 ```
 
 ## Interpretation guardrails

@@ -50,7 +50,10 @@ is still required before any transfer claim but is NOT today's work.
 
 ### ⏳ Stage 2 — CODE READY, NOT STARTED on real data
 - All code + two Colab notebooks exist and pass offline smoke tests.
-- Nothing has been generated/projected yet. **Blocked on local Docker/WSL2 setup** (see §6).
+- **Mini local-agent track added** (`scripts/run_mini_batch.sh`) — no Docker, 12 bug-fix
+  tasks, SWE-agent-compatible `.traj` output. Good partial de-risk while Docker/WSL2 is
+  being set up.
+- Full SWE-bench path still blocked on local Docker/WSL2 setup (see §6).
 
 ### ❌ Faithful Stage 1 — not started (needs Anthropic API key; deferred).
 
@@ -110,6 +113,18 @@ is still required before any transfer claim but is NOT today's work.
 
 Full runbook is in [stage2/README.md](stage2/README.md) Phase 1–4 + the notebooks. Summary:
 
+### Option A — Mini local-agent (Colab only, no Docker)
+
+Three notebooks in order — see [stage2/README.md](stage2/README.md):
+
+1. `stage2/notebooks/serve_qwen_colab.ipynb` (A100)
+2. `stage2/notebooks/mini_agent_colab.ipynb` (CPU) — batch + ingest + download `normalized.zip`
+3. `stage2/notebooks/project_and_analyze_colab.ipynb` (A100)
+
+Offline sanity (optional): `pytest stage2/tests/test_mini_catalog.py`.
+
+### Option B — Full SWE-bench (Docker + WSL2)
+
 **Architecture:** SWE-agent + Docker run **locally (WSL2)**; Qwen3-8B inference runs on a
 **remote Colab A100** (vLLM + cloudflared tunnel); SWE-agent points at the tunnel.
 Projection (`project_steps.py`) needs raw activations so it also runs **on the A100**.
@@ -152,9 +167,12 @@ single class rather than crashing — that's honest, not a bug.
 ## 7. Colab quick links
 - Stage 1 proxy (done): `stage1/notebooks/stage1_proxy_gpu_colab.ipynb`
 - Stage 2 serve model: `stage2/notebooks/serve_qwen_colab.ipynb`
+- Stage 2 mini agent batch (CPU): `stage2/notebooks/mini_agent_colab.ipynb`
 - Stage 2 project+analyze: `stage2/notebooks/project_and_analyze_colab.ipynb`
 
 Open any via `https://colab.research.google.com/github/abdelmagid07/latent_failiure_prediction/blob/main/<path>`
+
+**Mini track order:** serve (A100) → mini_agent (CPU) → project_and_analyze (A100).
 
 ---
 

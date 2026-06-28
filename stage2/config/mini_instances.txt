@@ -1,0 +1,18 @@
+# Mini local-agent instances (no Docker).
+# One instance id per line. Comment with #.
+#
+# 12 hand-written Python bug-fix tasks. Mix of easy/medium difficulty.
+# Target: ~50% solve rate with Qwen3-8B for balanced success/failure labels.
+
+mini_add_001
+mini_sign_002
+mini_offby_003
+mini_import_004
+mini_return_005
+mini_str_006
+mini_dict_007
+mini_list_008
+mini_cmp_009
+mini_div_010
+mini_strip_011
+mini_max_012
