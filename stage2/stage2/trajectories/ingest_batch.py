@@ -39,6 +39,21 @@ def ingest_batch(
     n_failure = len(records) - n_success
     mean_steps = sum(r.n_steps for r in records) / len(records) if records else 0.0
 
+    if not outcome_map:
+        print(
+            "\n  WARNING: no results.json provided — outcome labels fell back to .traj "
+            "metadata, which is NOT real SWE-bench resolution. Run the SWE-bench "
+            "evaluation harness and pass --results <report>.json for valid labels.",
+            flush=True,
+        )
+    if n_success == 0 or n_failure == 0:
+        print(
+            f"\n  WARNING: all trajectories are one class (success={n_success}, "
+            f"failure={n_failure}). Success-vs-failure analysis needs both classes — "
+            "check your labels and solve rate before projecting.",
+            flush=True,
+        )
+
     manifest = {
         "n_trajectories": len(records),
         "n_success": n_success,

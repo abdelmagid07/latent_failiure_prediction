@@ -39,7 +39,11 @@ def _outcome_from_info(info: dict[str, Any] | None) -> int | None:
             return 1 if val else 0
         if isinstance(val, str):
             low = val.lower()
-            if low in ("submitted", "resolved", "success", "passed", "pass"):
+            # NOTE: "submitted" is intentionally NOT success — it only means the
+            # agent produced a patch, not that the patch resolved the issue. Real
+            # resolution labels must come from the SWE-bench evaluation harness
+            # (results.json with resolved_ids).
+            if low in ("resolved", "success", "passed", "pass"):
                 return 1
             if low in ("failed", "failure", "error", "not_submitted"):
                 return 0
@@ -107,6 +111,16 @@ def load_results_map(results_path: Path) -> dict[str, int]:
     outcome_map: dict[str, int] = {}
 
     if isinstance(data, dict):
+        # SWE-bench harness report format: lists of instance ids by status.
+        # This is the AUTHORITATIVE source of resolved/unresolved labels.
+        if "resolved_ids" in data:
+            for iid in data.get("resolved_ids", []):
+                outcome_map[iid] = 1
+            for key in ("unresolved_ids", "error_ids", "empty_patch_ids", "incomplete_ids"):
+                for iid in data.get(key, []):
+                    outcome_map.setdefault(iid, 0)
+            return outcome_map
+
         if "resolved" in data and isinstance(data["resolved"], dict):
             for iid, val in data["resolved"].items():
                 outcome_map[iid] = 1 if val else 0
