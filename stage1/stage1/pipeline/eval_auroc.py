@@ -20,8 +20,13 @@ def eval_auroc(
     held_out_criteria: set[str],
     n_layers: int,
 ) -> dict:
-    scores_by_layer: dict[int, list[float]] = {l: [] for l in range(n_layers)}
-    labels_by_layer: dict[int, list[int]] = {l: [] for l in range(n_layers)}
+    # Discover actual layer count from activations (robust to model variations).
+    actual_n_layers = axis.shape[0]
+    if actual_n_layers != n_layers:
+        print(f"Warning: config says n_layers={n_layers}, but axis has {actual_n_layers}. Using {actual_n_layers}.", flush=True)
+
+    scores_by_layer: dict[int, list[float]] = {l: [] for l in range(actual_n_layers)}
+    labels_by_layer: dict[int, list[int]] = {l: [] for l in range(actual_n_layers)}
 
     n_convs = 0
     for npz_path in sorted(activation_dir.glob("*.npz")):
@@ -37,7 +42,7 @@ def eval_auroc(
             continue
 
         n_convs += 1
-        for layer in range(n_layers):
+        for layer in range(actual_n_layers):
             direction = unit_direction(axis[layer])
             h = acts[layer][mask]
             h_norm = h / np.linalg.norm(h, axis=1, keepdims=True).clip(min=1e-8)
@@ -46,7 +51,7 @@ def eval_auroc(
             labels_by_layer[layer].extend(labels[mask].astype(int).tolist())
 
     auroc = {}
-    for layer in range(n_layers):
+    for layer in range(actual_n_layers):
         y = labels_by_layer[layer]
         s = scores_by_layer[layer]
         if len(set(y)) < 2:

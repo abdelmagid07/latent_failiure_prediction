@@ -43,10 +43,12 @@ def main():
     ap.add_argument("--skip-extract", action="store_true", help="Use cached activations only")
     ap.add_argument("--model", default=proxy["model"])
     ap.add_argument("--force-extract", action="store_true")
+    ap.add_argument("--n-layers", type=int, default=proxy["n_layers"], help="Number of model layers (for robustness to model variations)")
     args = ap.parse_args()
 
     activations_dir: Path = proxy["activations_dir"]
     icrl_path = args.icrl
+    n_layers = args.n_layers
 
     if not icrl_path.exists():
         raise SystemExit(
@@ -60,7 +62,7 @@ def main():
         extract_run(
             icrl_path,
             model_name=args.model,
-            n_layers=proxy["n_layers"],
+            n_layers=n_layers,
             enable_thinking=proxy["enable_thinking"],
             dtype=proxy["dtype"],
             force=args.force_extract,
@@ -72,11 +74,11 @@ def main():
     held_out = set(split["held_out"])
 
     print("=== build_axis (proxy) ===", flush=True)
-    axis, meta = build_axis(activations_dir, train_criteria, proxy["n_layers"])
+    axis, meta = build_axis(activations_dir, train_criteria, n_layers)
     axis_path: Path = proxy["axis_path"]
     np.save(axis_path, axis)
 
-    results = eval_auroc(axis, activations_dir, held_out, proxy["n_layers"])
+    results = eval_auroc(axis, activations_dir, held_out, n_layers)
 
     passed = check_gate(
         results["auroc_by_layer"],

@@ -27,6 +27,7 @@ def build_axis(
     used_convs = []
 
     hidden_dim = None
+    actual_n_layers = None
     for npz_path in sorted(activation_dir.glob("*.npz")):
         d = load_activation_npz(npz_path)
         crit = str(d["criterion_id"])
@@ -36,11 +37,15 @@ def build_axis(
         acts = d["layer_activations"].astype(np.float64)  # (L, seq, H)
         if hidden_dim is None:
             hidden_dim = acts.shape[-1]
-            post_sum = np.zeros((n_layers, hidden_dim), dtype=np.float64)
-            pre_sum = np.zeros((n_layers, hidden_dim), dtype=np.float64)
+            actual_n_layers = acts.shape[0]
+            # Use actual layer count from activations, not config (robust to model variations).
+            if actual_n_layers != n_layers:
+                print(f"Warning: config says n_layers={n_layers}, but activations have {actual_n_layers}. Using {actual_n_layers}.", flush=True)
+            post_sum = np.zeros((actual_n_layers, hidden_dim), dtype=np.float64)
+            pre_sum = np.zeros((actual_n_layers, hidden_dim), dtype=np.float64)
 
         labels = d["token_labels"]
-        for layer in range(n_layers):
+        for layer in range(actual_n_layers):
             layer_h = acts[layer]
             pre_mask = labels == 0
             post_mask = labels == 1
