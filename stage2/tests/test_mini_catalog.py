@@ -25,19 +25,52 @@ def test_buggy_repos_fail_pytest():
 def test_fixed_repo_passes():
     """Sanity: applying the obvious fix makes tests pass."""
     fixes = {
-        "mini_add_001": ("calc.py", "def add(a, b):\n    return a + b\n"),
-        "mini_sign_002": (
-            "stats.py",
-            "def mean(values):\n"
-            "    total = 0\n"
-            "    for v in values:\n"
-            "        total += v\n"
-            "    return total / len(values)\n",
+        # easy: store handlers in a list and fan out
+        "mini_eventbus_001": (
+            "eventbus/bus.py",
+            "class EventBus:\n"
+            '    """Tiny synchronous publish/subscribe bus."""\n\n'
+            "    def __init__(self):\n"
+            "        self._handlers = {}\n\n"
+            "    def subscribe(self, event, handler):\n"
+            "        self._handlers.setdefault(event, []).append(handler)\n\n"
+            "    def emit(self, event, **payload):\n"
+            "        for handler in self._handlers.get(event, []):\n"
+            "            handler(payload)\n",
         ),
-        "mini_offby_003": (
-            "loops.py",
-            "def count_up_to(n: int) -> list[int]:\n"
-            "    return list(range(1, n + 1))\n",
+        # medium: round dollars to nearest cent
+        "mini_money_006": (
+            "money/amount.py",
+            "class Money:\n"
+            '    """Integer-cent money value."""\n\n'
+            "    def __init__(self, cents):\n"
+            "        self.cents = cents\n\n"
+            "    @classmethod\n"
+            "    def from_dollars(cls, dollars):\n"
+            "        return cls(round(dollars * 100))\n\n"
+            "    def __add__(self, other):\n"
+            "        return Money(self.cents + other.cents)\n\n"
+            "    def __eq__(self, other):\n"
+            "        return isinstance(other, Money) and self.cents == other.cents\n\n"
+            "    def dollars(self):\n"
+            "        return self.cents / 100\n",
+        ),
+        # hard: merge nested dicts recursively without mutating inputs
+        "mini_confmerge_008": (
+            "confmerge/deepmerge.py",
+            "def deep_merge(base, override):\n"
+            '    """Merge `override` onto `base`, recursing into nested dicts."""\n'
+            "    result = dict(base)\n"
+            "    for key, value in override.items():\n"
+            "        if (\n"
+            "            key in result\n"
+            "            and isinstance(result[key], dict)\n"
+            "            and isinstance(value, dict)\n"
+            "        ):\n"
+            "            result[key] = deep_merge(result[key], value)\n"
+            "        else:\n"
+            "            result[key] = value\n"
+            "    return result\n",
         ),
     }
     for iid, (rel, content) in fixes.items():
